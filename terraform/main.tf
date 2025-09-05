@@ -5,6 +5,19 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  # --- FINAL SOLUTION: REMOTE BACKEND CONFIGURATION ---
+  # Yeh Terraform ko batata hai ke apni "yaad-dasht" kahan save karni hai
+  backend "s3" {
+    # Yahan apna UNIQUE S3 bucket naam likhein jo aapne banaya tha
+    bucket         = "weather-bucket" 
+    key            = "weather-app/terraform.tfstate"
+    region         = "us-east-1"
+    
+    # Yeh state file ko lock karne ke liye hai
+    dynamodb_table = "terraform-state-locks" 
+    encrypt        = true
+  }
 }
 
 provider "aws" {
@@ -150,7 +163,6 @@ resource "aws_lb_listener" "main" {
   }
 }
 
-# CORRECTED SYNTAX FOR LISTENER RULE
 resource "aws_lb_listener_rule" "backend_api" {
   listener_arn = aws_lb_listener.main.arn
   priority     = 100
@@ -168,8 +180,6 @@ resource "aws_lb_listener_rule" "backend_api" {
 }
 
 # --- EC2 Instances ---
-
-# ADDED DATA BLOCKS TO RELIABLY PASS VARIABLES TO USER DATA
 data "template_file" "frontend_user_data" {
   template = file("${path.module}/user-data.sh.tpl")
   vars = {
@@ -186,34 +196,26 @@ data "template_file" "backend_user_data" {
 
 variable "key_name" {
   description = "Name of the EC2 Key Pair to use"
-  default     = "pairkey" # Make sure this key pair exists in your AWS account
+  default     = "pairkey"
 }
 
 resource "aws_instance" "frontend" {
-  # CORRECTED AMI ID FOR UBUNTU 22.04 IN US-EAST-1
   ami           = "ami-053b0d53c279acc90"
-  instance_type = "t3.micro"
+  instance_type = "t2.micro"
   subnet_id     = aws_subnet.public_1.id
   key_name      = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  
-  # UPDATED USER DATA METHOD
   user_data = data.template_file.frontend_user_data.rendered
-
   tags = { Name = "frontend-instance" }
 }
 
 resource "aws_instance" "backend" {
-  # CORRECTED AMI ID FOR UBUNTU 22.04 IN US-EAST-1
   ami           = "ami-053b0d53c279acc90"
-  instance_type = "t3.micro"
+  instance_type = "t2.micro"
   subnet_id     = aws_subnet.public_2.id
   key_name      = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-
-  # UPDATED USER DATA METHOD
   user_data = data.template_file.backend_user_data.rendered
-
   tags = { Name = "backend-instance" }
 }
 
