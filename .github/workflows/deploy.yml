@@ -28,7 +28,7 @@ jobs:
           terraform apply -auto-approve
 
       - name: Set Terraform Outputs
-        id: set_outputs
+        id: set_outputs # Is step ko ek ID de rahe hain
         run: |
           cd terraform
           echo "FRONTEND_IP=$(terraform output -raw frontend_instance_public_ip | head -n 1)" >> $GITHUB_OUTPUT
@@ -46,7 +46,6 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           aws ecr describe-repositories --repository-names $ECR_REPOSITORY || aws ecr create-repository --repository-name $ECR_REPOSITORY
-          # FIX: Make the build command more explicit
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f backend/Dockerfile ./backend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
@@ -57,10 +56,10 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           aws ecr describe-repositories --repository-names $ECR_REPOSITORY || aws ecr create-repository --repository-name $ECR_REPOSITORY
-          # FIX: Make the build command more explicit
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f frontend/Dockerfile ./frontend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
+      # --- FINAL FIX: Reading outputs from the new method ---
       - name: Deploy Backend to EC2
         uses: appleboy/ssh-action@master
         with:
@@ -74,6 +73,7 @@ jobs:
             sudo docker pull ${{ steps.login-ecr.outputs.registry }}/weather-app-backend:${{ github.sha }}
             sudo docker run -d --name backend-container -p 5001:5001 ${{ steps.login-ecr.outputs.registry }}/weather-app-backend:${{ github.sha }}
 
+      # --- FINAL FIX: Reading outputs from the new method ---
       - name: Deploy Frontend to EC2
         uses: appleboy/ssh-action@master
         with:
