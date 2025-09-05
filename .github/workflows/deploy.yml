@@ -21,27 +21,26 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
-      # STEP 1: Sirf infrastructure banayein ya update karein
       - name: Terraform Apply
         run: |
           cd terraform
-          # Init ab S3 backend se connect hoga
           terraform init
           terraform apply -auto-approve
 
-      # STEP 2: Ab saaf-suthray outputs ko env variables mein set karein
-      - name: Set Terraform Outputs as Env Vars
+      # --- FINAL FIX: Using a more robust method to set outputs ---
+      - name: Set Terraform Outputs
+        id: set_outputs # Is step ko ek ID de rahe hain
         run: |
           cd terraform
-          echo "FRONTEND_IP=$(terraform output -raw frontend_instance_public_ip)" >> $GITHUB_ENV
-          echo "BACKEND_IP=$(terraform output -raw backend_instance_public_ip)" >> $GITHUB_ENV
-          echo "ALB_DNS=$(terraform output -raw alb_dns_name)" >> $GITHUB_ENV
+          echo "FRONTEND_IP=$(terraform output -raw frontend_instance_public_ip | head -n 1)" >> $GITHUB_OUTPUT
+          echo "BACKEND_IP=$(terraform output -raw backend_instance_public_ip | head -n 1)" >> $GITHUB_OUTPUT
+          echo "ALB_DNS=$(terraform output -raw alb_dns_name | head -n 1)" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build, tag, and push backend image to Amazon ECR
+      - name: Build, tag, and push backend image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: weather-app-backend
@@ -51,7 +50,7 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      - name: Build, tag, and push frontend image to Amazon ECR
+      - name: Build, tag, and push frontend image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: weather-app-frontend
@@ -61,10 +60,11 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./frontend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
+      # --- FINAL FIX: Reading outputs from the new method ---
       - name: Deploy Backend to EC2
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ env.BACKEND_IP }}
+          host: ${{ steps.set_outputs.outputs.BACKEND_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
@@ -74,10 +74,11 @@ jobs:
             sudo docker pull ${{ steps.login-ecr.outputs.registry }}/weather-app-backend:${{ github.sha }}
             sudo docker run -d --name backend-container -p 5001:5001 ${{ steps.login-ecr.outputs.registry }}/weather-app-backend:${{ github.sha }}
 
+      # --- FINAL FIX: Reading outputs from the new method ---
       - name: Deploy Frontend to EC2
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ env.FRONTEND_IP }}
+          host: ${{ steps.set_outputs.outputs.FRONTEND_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
@@ -85,6 +86,5 @@ jobs:
             sudo docker stop frontend-container || true
             sudo docker rm frontend-container || true
             sudo docker pull ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
-            sudo docker run -d --name frontend-container -p 5000:5000 -e BACKEND_API_URL="http://${{ env.ALB_DNS }}/api/weather" ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
+            sudo docker run -d --name frontend-container -p 5000:5000 -e BACKEND_API_URL="http://${{ steps.set_outputs.outputs.ALB_DNS }}/api/weather" ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
 
- 
