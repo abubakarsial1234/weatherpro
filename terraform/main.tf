@@ -19,7 +19,7 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# --- FIX 2: Find the correct Free Tier eligible Ubuntu AMI ---
+# Finds the latest Free Tier eligible Ubuntu AMI automatically
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical's Owner ID
@@ -34,7 +34,6 @@ data "aws_ami" "ubuntu" {
     values = ["hvm"]
   }
 
-  # This filter ensures we get an x86 AMI compatible with t2.micro
   filter {
     name   = "architecture"
     values = ["x86_64"]
@@ -129,7 +128,7 @@ resource "aws_security_group" "ec2_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["0.0.0.0/0"] # WARNING: Security ke liye isko apne IP se badal dein
   }
   egress {
     from_port   = 0
@@ -203,13 +202,12 @@ resource "aws_lb_listener_rule" "backend_api" {
 # --- EC2 Instances ---
 variable "key_name" {
   description = "Name of the EC2 Key Pair to use"
-  default     = "newkey"
+  default     = "newkey" # NOTE: Yeh key pair AWS mein maujood honi chahiye
 }
 
 resource "aws_instance" "frontend" {
-  ami                    = "ami-0360c520857e3138f"
-  # --- FIX 2: Ensure instance type is t2.micro ---
-  instance_type          = "t3.micro" 
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.micro" # Using the reliable Free Tier instance type
   subnet_id              = aws_subnet.public_1.id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
@@ -218,9 +216,8 @@ resource "aws_instance" "frontend" {
 }
 
 resource "aws_instance" "backend" {
-  ami                    = "ami-0360c520857e3138f"
-  # --- FIX 2: Ensure instance type is t2.micro ---
-  instance_type          = "t3.micro"
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.micro" # Using the reliable Free Tier instance type
   subnet_id              = aws_subnet.public_2.id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
