@@ -199,7 +199,7 @@ resource "aws_lb_listener_rule" "backend_api" {
 # --- EC2 Instances ---
 variable "key_name" {
   description = "Name of the EC2 Key Pair to use"
-  default     = "pairkey"
+  default     = "newkey"
 }
 
 resource "aws_instance" "frontend" {
