@@ -1,3 +1,5 @@
+# .github/workflows/deploy-weather-app.yml
+
 name: Deploy Weather App to AWS
 
 on:
@@ -9,37 +11,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Apply
+        id: terraform
         run: |
           cd terraform
           terraform init
           terraform apply -auto-approve
 
-      # --- THE REAL & FINAL FIX: Forcefully cleaning the output ---
+      # --- FIX 1: Simplified output capture ---
       - name: Set Terraform Outputs
         id: tf_outputs
         run: |
           cd terraform
-          # Pipe the output to `cut` to remove any extra debug text from the runner
-          echo "frontend_ip=$(terraform output -raw frontend_instance_public_ip | cut -d':' -f1)" >> $GITHUB_OUTPUT
-          echo "backend_ip=$(terraform output -raw backend_instance_public_ip | cut -d':' -f1)" >> $GITHUB_OUTPUT
-          echo "alb_dns=$(terraform output -raw alb_dns_name | cut -d':' -f1)" >> $GITHUB_OUTPUT
+          echo "frontend_ip=$(terraform output -raw frontend_instance_public_ip)" >> $GITHUB_OUTPUT
+          echo "backend_ip=$(terraform output -raw backend_instance_public_ip)" >> $GITHUB_OUTPUT
+          echo "alb_dns=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+
+      # --- FIX 2: Added a step to verify outputs for easier debugging ---
+      - name: Verify Terraform Outputs
+        run: |
+          echo "Frontend IP is: ${{ steps.tf_outputs.outputs.frontend_ip }}"
+          echo "Backend IP is: ${{ steps.tf_outputs.outputs.backend_ip }}"
+          echo "ALB DNS is: ${{ steps.tf_outputs.outputs.alb_dns }}"
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push backend image
         env:
@@ -47,7 +56,7 @@ jobs:
           ECR_REPOSITORY: weather-app-backend
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          aws ecr describe-repositories --repository-names $ECR_REPOSITORY || aws ecr create-repository --repository-name $ECR_REPOSITORY
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY >/dev/null 2>&1 || aws ecr create-repository --repository-name $ECR_REPOSITORY >/dev/null
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f backend/Dockerfile ./backend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
@@ -57,12 +66,12 @@ jobs:
           ECR_REPOSITORY: weather-app-frontend
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          aws ecr describe-repositories --repository-names $ECR_REPOSITORY || aws ecr create-repository --repository-name $ECR_REPOSITORY
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY >/dev/null 2>&1 || aws ecr create-repository --repository-name $ECR_REPOSITORY >/dev/null
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f frontend/Dockerfile ./frontend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Deploy Backend to EC2
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.0.3 # --- FIX 3: Using a specific version is safer ---
         with:
           host: ${{ steps.tf_outputs.outputs.backend_ip }}
           username: ubuntu
@@ -75,7 +84,7 @@ jobs:
             sudo docker run -d --name backend-container -p 5001:5001 ${{ steps.login-ecr.outputs.registry }}/weather-app-backend:${{ github.sha }}
 
       - name: Deploy Frontend to EC2
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.0.3 # --- FIX 3: Using a specific version is safer ---
         with:
           host: ${{ steps.tf_outputs.outputs.frontend_ip }}
           username: ubuntu
@@ -86,4 +95,3 @@ jobs:
             sudo docker rm frontend-container || true
             sudo docker pull ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
             sudo docker run -d --name frontend-container -p 5000:5000 -e BACKEND_API_URL="http://${{ steps.tf_outputs.outputs.alb_dns }}/api/weather" ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
-
