@@ -10,7 +10,7 @@ terraform {
   # Yeh Terraform ko batata hai ke apni "yaad-dasht" kahan save karni hai
   backend "s3" {
     # Yahan apna UNIQUE S3 bucket naam likhein jo aapne banaya tha
-    bucket         = "weather-bucket" 
+    bucket         = "abubakarsial-weather-app-tfstate" 
     key            = "weather-app/terraform.tfstate"
     region         = "us-east-1"
     
