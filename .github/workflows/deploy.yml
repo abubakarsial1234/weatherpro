@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  deploy:   
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -21,12 +21,16 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
+      # --- FIX #1: SEPARATED TERRAFORM APPLY AND OUTPUT STEPS ---
       - name: Terraform Apply
-        id: terraform
         run: |
           cd terraform
           terraform init
           terraform apply -auto-approve
+
+      - name: Set Terraform Outputs as Env Vars
+        run: |
+          cd terraform
           echo "FRONTEND_IP=$(terraform output -raw frontend_instance_public_ip)" >> $GITHUB_ENV
           echo "BACKEND_IP=$(terraform output -raw backend_instance_public_ip)" >> $GITHUB_ENV
           echo "ALB_DNS=$(terraform output -raw alb_dns_name)" >> $GITHUB_ENV
@@ -59,7 +63,8 @@ jobs:
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.BACKEND_IP }}
-          username: ec2-user
+          # --- FIX #2: CORRECT USERNAME FOR UBUNTU ---
+          username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
             sudo aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
@@ -72,7 +77,8 @@ jobs:
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.FRONTEND_IP }}
-          username: ec2-user
+          # --- FIX #2: CORRECT USERNAME FOR UBUNTU ---
+          username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
             sudo aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
