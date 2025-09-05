@@ -19,7 +19,7 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# --- FIX 2: Find the latest Ubuntu AMI automatically ---
+# --- FIX 2: Find the correct Free Tier eligible Ubuntu AMI ---
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical's Owner ID
@@ -32,6 +32,12 @@ data "aws_ami" "ubuntu" {
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
+  }
+
+  # This filter ensures we get an x86 AMI compatible with t2.micro
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
   }
 }
 
@@ -108,13 +114,13 @@ resource "aws_security_group" "ec2_sg" {
   description = "Allow traffic from ALB and SSH"
   vpc_id      = aws_vpc.main.id
   ingress {
-    from_port       = 5000 # Allow traffic on port 5000 for frontend
+    from_port       = 5000
     to_port         = 5000
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
   ingress {
-    from_port       = 5001 # Allow traffic on port 5001 for backend
+    from_port       = 5001
     to_port         = 5001
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
@@ -152,7 +158,6 @@ resource "aws_lb_target_group" "frontend" {
   health_check {
     path = "/"
   }
-  # --- FIX 1: Add lifecycle rule ---
   lifecycle {
     create_before_destroy = true
   }
@@ -166,7 +171,6 @@ resource "aws_lb_target_group" "backend" {
   health_check {
     path = "/api/weather"
   }
-  # --- FIX 1: Add lifecycle rule ---
   lifecycle {
     create_before_destroy = true
   }
@@ -199,13 +203,13 @@ resource "aws_lb_listener_rule" "backend_api" {
 # --- EC2 Instances ---
 variable "key_name" {
   description = "Name of the EC2 Key Pair to use"
-  default     = "newkey"
+  default     = "pairkey"
 }
 
 resource "aws_instance" "frontend" {
-  # --- FIX 2: Use the dynamic AMI ID ---
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t2.micro"
+  # --- FIX 2: Ensure instance type is t2.micro ---
+  instance_type          = "t2.micro" 
   subnet_id              = aws_subnet.public_1.id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
@@ -214,8 +218,8 @@ resource "aws_instance" "frontend" {
 }
 
 resource "aws_instance" "backend" {
-  # --- FIX 2: Use the dynamic AMI ID ---
   ami                    = data.aws_ami.ubuntu.id
+  # --- FIX 2: Ensure instance type is t2.micro ---
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.public_2.id
   key_name               = var.key_name
