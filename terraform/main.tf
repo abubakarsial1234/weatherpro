@@ -6,16 +6,13 @@ terraform {
     }
   }
 
-  # --- FINAL SOLUTION: REMOTE BACKEND CONFIGURATION ---
-  # Yeh Terraform ko batata hai ke apni "yaad-dasht" kahan save karni hai
+  # Remote backend S3 bucket aur DynamoDB table ko save karta hai
+  # NOTE: Yeh S3 bucket aur DynamoDB table aapko pehle se AWS mein banani hogi
   backend "s3" {
-    # Yahan apna UNIQUE S3 bucket naam likhein jo aapne banaya tha
-    bucket         = "abubakarsial-weather-app-tfstate" 
+    bucket         = "abubakarsial-weather-app-tfstate" # Yahan apna UNIQUE S3 bucket naam likhein
     key            = "weather-app/terraform.tfstate"
     region         = "us-east-1"
-    
-    # Yeh state file ko lock karne ke liye hai
-    dynamodb_table = "terraform-state-locks" 
+    dynamodb_table = "terraform-state-locks" # Yahan apni DynamoDB table ka naam likhein
     encrypt        = true
   }
 }
@@ -110,7 +107,7 @@ resource "aws_security_group" "ec2_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["0.0.0.0/0"] # WARNING: Security ke liye isko apne IP se badal dein
   }
 
   egress {
@@ -134,7 +131,7 @@ resource "aws_lb" "main" {
 
 resource "aws_lb_target_group" "frontend" {
   name     = "frontend-tg"
-  port     = 80
+  port     = 5000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
   health_check {
@@ -144,7 +141,7 @@ resource "aws_lb_target_group" "frontend" {
 
 resource "aws_lb_target_group" "backend" {
   name     = "backend-tg"
-  port     = 80
+  port     = 5001
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
   health_check {
@@ -180,55 +177,42 @@ resource "aws_lb_listener_rule" "backend_api" {
 }
 
 # --- EC2 Instances ---
-data "template_file" "frontend_user_data" {
-  template = file("${path.module}/user-data.sh.tpl")
-  vars = {
-    proxy_port = "5000"
-  }
-}
-
-data "template_file" "backend_user_data" {
-  template = file("${path.module}/user-data.sh.tpl")
-  vars = {
-    proxy_port = "5001"
-  }
-}
-
 variable "key_name" {
   description = "Name of the EC2 Key Pair to use"
-  default     = "pairkey"
+  default     = "pairkey" # Yahan apni EC2 key pair ka naam likhein
 }
 
 resource "aws_instance" "frontend" {
-  ami           = "ami-053b0d53c279acc90"
-  instance_type = "t3.small"
-  subnet_id     = aws_subnet.public_1.id
-  key_name      = var.key_name
+  ami                    = "ami-0c55b159cbfafe1f0" # Ubuntu 22.04 LTS for us-east-1
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.public_1.id
+  key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  user_data = data.template_file.frontend_user_data.rendered
-  tags = { Name = "frontend-instance" }
+  user_data              = file("setup.sh")
+  tags                   = { Name = "frontend-instance" }
 }
 
 resource "aws_instance" "backend" {
-  ami           = "ami-053b0d53c279acc90"
-  instance_type = "t3.small"
-  subnet_id     = aws_subnet.public_2.id
-  key_name      = var.key_name
+  ami                    = "ami-0c55b159cbfafe1f0" # Ubuntu 22.04 LTS for us-east-1
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.public_2.id
+  key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  user_data = data.template_file.backend_user_data.rendered
-  tags = { Name = "backend-instance" }
+  user_data              = file("setup.sh")
+  tags                   = { Name = "backend-instance" }
 }
 
+# --- Target Group Attachments ---
 resource "aws_lb_target_group_attachment" "frontend" {
   target_group_arn = aws_lb_target_group.frontend.arn
   target_id        = aws_instance.frontend.id
-  port             = 80
+  port             = 5000
 }
 
 resource "aws_lb_target_group_attachment" "backend" {
   target_group_arn = aws_lb_target_group.backend.arn
   target_id        = aws_instance.backend.id
-  port             = 80
+  port             = 5001
 }
 
 # --- Outputs ---
