@@ -87,4 +87,3 @@ jobs:
             sudo docker rm frontend-container || true
             sudo docker pull ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
             sudo docker run -d --name frontend-container -p 5000:5000 -e BACKEND_API_URL="http://${{ steps.tf_outputs.outputs.alb_dns }}/api/weather" ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
-
