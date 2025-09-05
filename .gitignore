@@ -1,0 +1,15 @@
+# Security - Private Keys ko ignore karein
+*.pem
+
+# Terraform ki temporary files aur state ko ignore karein
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
+*.tfvars
+
+# Python ki temporary files ko ignore karein
+__pycache__/
+*.pyc
+venv/
+.venv/

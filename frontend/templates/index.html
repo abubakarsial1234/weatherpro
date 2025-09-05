@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Weather App</title>
+    <style>body { font-family: sans-serif; text-align: center; margin-top: 50px; }</style>
+</head>
+<body>
+    <h1>Weather Information</h1>
+    {% if error %}
+        <p style="color:red;">{{ error }}</p>
+    {% elif weather %}
+        <h2>City: {{ weather.city }}</h2>
+        <p>Temperature: {{ weather.temperature }}° C</p>
+        <p>Condition: {{ weather.condition }}</p>
+    {% else %}
+        <p>Could not load data.</p>
+    {% endif %}
+</body>
+</html>
