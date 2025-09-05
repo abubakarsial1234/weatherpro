@@ -27,12 +27,13 @@ jobs:
           terraform init
           terraform apply -auto-approve
 
-      # --- FINAL FIX: Using a dedicated action to read outputs reliably ---
-      - name: Read Terraform Outputs
-        id: tf_outputs
-        uses: hashicorp/terraform-json-to-outputs@v1
-        with:
-          tf_outputs_path: terraform/terraform.tfout
+      # --- THE REAL FIX: Set outputs to environment variables cleanly ---
+      - name: Set Terraform Outputs to Environment
+        run: |
+          cd terraform
+          echo "FRONTEND_IP=$(terraform output -raw frontend_instance_public_ip)" >> $GITHUB_ENV
+          echo "BACKEND_IP=$(terraform output -raw backend_instance_public_ip)" >> $GITHUB_ENV
+          echo "ALB_DNS=$(terraform output -raw alb_dns_name)" >> $GITHUB_ENV
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -61,7 +62,7 @@ jobs:
       - name: Deploy Backend to EC2
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ fromJson(steps.tf_outputs.outputs.tf_outputs).backend_instance_public_ip.value }}
+          host: ${{ env.BACKEND_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
@@ -74,7 +75,7 @@ jobs:
       - name: Deploy Frontend to EC2
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ fromJson(steps.tf_outputs.outputs.tf_outputs).frontend_instance_public_ip.value }}
+          host: ${{ env.FRONTEND_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
@@ -82,5 +83,5 @@ jobs:
             sudo docker stop frontend-container || true
             sudo docker rm frontend-container || true
             sudo docker pull ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
-            sudo docker run -d --name frontend-container -p 5000:5000 -e BACKEND_API_URL="http://${{ fromJson(steps.tf_outputs.outputs.tf_outputs).alb_dns_name.value }}/api/weather" ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
+            sudo docker run -d --name frontend-container -p 5000:5000 -e BACKEND_API_URL="http://${{ env.ALB_DNS }}/api/weather" ${{ steps.login-ecr.outputs.registry }}/weather-app-frontend:${{ github.sha }}
 
