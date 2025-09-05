@@ -207,9 +207,9 @@ variable "key_name" {
 }
 
 resource "aws_instance" "frontend" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = "ami-0360c520857e3138f"
   # --- FIX 2: Ensure instance type is t2.micro ---
-  instance_type          = "t2.micro" 
+  instance_type          = "t3.micro" 
   subnet_id              = aws_subnet.public_1.id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
@@ -218,9 +218,9 @@ resource "aws_instance" "frontend" {
 }
 
 resource "aws_instance" "backend" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = "ami-0360c520857e3138f"
   # --- FIX 2: Ensure instance type is t2.micro ---
-  instance_type          = "t2.micro"
+  instance_type          = "t3.micro"
   subnet_id              = aws_subnet.public_2.id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
